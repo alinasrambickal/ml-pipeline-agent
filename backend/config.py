@@ -28,10 +28,14 @@ GROQ_MODEL = "llama-3.3-70b-versatile"
 AGENT_TEMPERATURE = 0.2       # low temp → more deterministic code gen
 MAX_ITERATIONS = 3
 
-# ── Sandbox (exec-based, pre-Docker) ──────────────────────────────────────
+# ── Sandbox (Docker-based, Step 2) ────────────────────────────────────────
 EXEC_TIMEOUT_SECONDS = 60
 MAX_METRICS_FILE_BYTES = 10_000   # cap metrics read-back to 10 KB
 MAX_DATASET_BYTES = 50 * 1024 * 1024  # 50 MB upload limit
+
+DOCKER_IMAGE = "ml-pipeline-sandbox:latest"
+DOCKER_MEMORY_LIMIT = "512m"
+DOCKER_CPU_LIMIT = "1"
 
 # ── Blocked patterns for generated code validation ────────────────────────
 BLOCKED_CODE_PATTERNS = [

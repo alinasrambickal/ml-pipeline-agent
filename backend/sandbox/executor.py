@@ -1,140 +1,124 @@
 """
-sandbox/executor.py  (Step 1 — exec-based, pre-Docker)
+sandbox/executor.py  (Step 2 — Docker-based)
 
-Executes LLM-generated training code in a restricted Python namespace with a
-wall-clock timeout. Real isolation comes in Step 2 when this is replaced by
-Docker container execution.
+Runs LLM-generated training code inside an isolated Docker container instead
+of the Step 1 in-process exec(). The container gets no network, a read-only
+root filesystem (except /output and a tmpfs /tmp), and memory/CPU/pid caps —
+isolation enforced by the OS/container runtime rather than a Python builtins
+whitelist. That whitelist still exists (in sandbox/runner.py, which runs
+inside the container) as defense-in-depth, but it is no longer the primary
+security boundary.
 
-Security measures applied here:
-  1. Restricted __builtins__: removes open, exec, eval, __import__, etc.
-  2. Pre-execution static validation (already done in coder.py, doubled here).
-  3. Wall-clock timeout via threading.
-  4. Metrics extracted only from the `metrics` variable in the exec namespace.
-  5. stdout/stderr captured via contextlib redirect — not exposed to real streams.
+Since there's no shared process/namespace across the container boundary, the
+generated code's `metrics` dict can't be read directly out of a namespace like
+in Step 1. Instead: the dataset is mounted read-only, the generated script is
+mounted read-only, an empty output directory is mounted read-write, and
+runner.py (baked into the image) executes the script and writes
+/output/result.json, which the host reads back after the container exits.
 """
 
-import io
 import json
-import threading
-import contextlib
-import traceback
+import subprocess
+import tempfile
+import uuid
 from pathlib import Path
-from config import EXEC_TIMEOUT_SECONDS, MAX_METRICS_FILE_BYTES, BLOCKED_CODE_PATTERNS
-
-
-# ── Allowed builtins whitelist ────────────────────────────────────────────
-# Everything NOT in this list is inaccessible inside exec'd code.
-_SAFE_BUILTINS = {
-    "__import__": __import__,
-    "range": range,
-    "len": len,
-    "int": int,
-    "float": float,
-    "str": str,
-    "bool": bool,
-    "list": list,
-    "dict": dict,
-    "tuple": tuple,
-    "set": set,
-    "zip": zip,
-    "map": map,
-    "filter": filter,
-    "enumerate": enumerate,
-    "sorted": sorted,
-    "min": min,
-    "max": max,
-    "sum": sum,
-    "abs": abs,
-    "round": round,
-    "isinstance": isinstance,
-    "issubclass": issubclass,
-    "hasattr": hasattr,
-    "type": type,
-    "repr": repr,
-    "None": None,
-    "True": True,
-    "False": False,
-}
+from config import (
+    EXEC_TIMEOUT_SECONDS,
+    MAX_METRICS_FILE_BYTES,
+    BLOCKED_CODE_PATTERNS,
+    DOCKER_IMAGE,
+    DOCKER_MEMORY_LIMIT,
+    DOCKER_CPU_LIMIT,
+)
 
 
 def run_code(code: str, dataset_path: str) -> dict:
     """
-    Execute generated training code and return results.
+    Execute generated training code in a Docker container and return results.
 
     Args:
         code: Python script string (already validated by coder.py).
         dataset_path: Absolute path to the dataset CSV. Validated here against
-                      path traversal before being injected into the namespace.
+                      path traversal before being mounted into the container.
 
     Returns:
         Dict with keys: metrics (dict), stdout (str), stderr (str), error (str|None).
     """
-    # Re-validate path (defence in depth — coder prompt already restricts this)
     safe_path = _validate_dataset_path(dataset_path)
-
-    # Re-run static check (coder.py already did this, but executor is a trust boundary)
     _static_check(code)
 
-    stdout_buf = io.StringIO()
-    stderr_buf = io.StringIO()
     result = {"metrics": {}, "stdout": "", "stderr": "", "error": None}
-    exec_exception: list[Exception] = []  # mutable container for thread result
 
-    # Restricted namespace: only safe builtins + the dataset path constant
-    namespace = {
-        "__builtins__": _SAFE_BUILTINS,
-        "DATASET_PATH": str(safe_path),
-        "print": lambda *args, **kwargs: stdout_buf.write(
-            " ".join(str(a) for a in args) + kwargs.get("end", "\n")
-        ),
-    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        script_path = tmp / "script.py"
+        script_path.write_text(code)
+        output_dir = tmp / "output"
+        output_dir.mkdir()
 
-    def _exec_target():
+        container_name = f"ml-agent-sandbox-{uuid.uuid4().hex[:12]}"
+
+        docker_cmd = [
+            "docker", "run", "--rm",
+            "--name", container_name,
+            "--network", "none",
+            "--memory", DOCKER_MEMORY_LIMIT,
+            "--cpus", DOCKER_CPU_LIMIT,
+            "--pids-limit", "128",
+            "--read-only",
+            "--tmpfs", "/tmp:rw,size=64m",
+            "-v", f"{script_path}:/workspace/script.py:ro",
+            "-v", f"{safe_path}:/data/input.csv:ro",
+            "-v", f"{output_dir}:/output:rw",
+            "-e", f"MAX_METRICS_BYTES={MAX_METRICS_FILE_BYTES}",
+            DOCKER_IMAGE,
+        ]
+
         try:
-            with contextlib.redirect_stdout(stdout_buf), \
-                 contextlib.redirect_stderr(stderr_buf):
-                exec(code, namespace)  # noqa: S102 — controlled, validated input
-        except Exception as e:  # noqa: BLE001
-            exec_exception.append(e)
+            proc = subprocess.run(
+                docker_cmd,
+                capture_output=True,
+                text=True,
+                timeout=EXEC_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            subprocess.run(["docker", "kill", container_name], capture_output=True)
+            result["error"] = f"Execution timed out after {EXEC_TIMEOUT_SECONDS}s."
+            return result
 
-    thread = threading.Thread(target=_exec_target, daemon=True)
-    thread.start()
-    thread.join(timeout=EXEC_TIMEOUT_SECONDS)
+        result_file = output_dir / "result.json"
+        if not result_file.exists():
+            # Container exited before writing output — e.g. Docker itself failed
+            # to start it, or runner.py crashed outside its own try/except.
+            result["error"] = (
+                "Container exited without producing a result.\n"
+                f"docker stderr: {proc.stderr[-2000:]}"
+            )
+            result["stderr"] = proc.stderr[-2000:]
+            return result
 
-    result["stdout"] = stdout_buf.getvalue()
-    result["stderr"] = stderr_buf.getvalue()
+        try:
+            raw = json.loads(result_file.read_text())
+        except json.JSONDecodeError:
+            result["error"] = "Container produced malformed result.json."
+            return result
 
-    if thread.is_alive():
-        # Thread still running after timeout — we can't kill it cleanly in
-        # CPython, but daemon=True means it dies with the process. Log it.
-        result["error"] = f"Execution timed out after {EXEC_TIMEOUT_SECONDS}s."
-        return result
+        result["stdout"] = raw.get("stdout", "")
+        result["stderr"] = raw.get("stderr", "")
+        result["error"] = raw.get("error")
 
-    if exec_exception:
-        tb = traceback.format_exception(type(exec_exception[0]), exec_exception[0], exec_exception[0].__traceback__)
-        result["error"] = "".join(tb)
-        result["stderr"] += result["error"]
-        return result
-
-    # Extract metrics from the exec namespace
-    raw_metrics = namespace.get("metrics")
-    if raw_metrics is None:
-        result["error"] = "Generated code did not set a `metrics` variable."
-    elif not isinstance(raw_metrics, dict):
-        result["error"] = f"`metrics` must be a dict, got {type(raw_metrics).__name__}."
-    else:
-        # Sanitise: only keep numeric values, cap total size
-        safe_metrics = {}
-        for k, v in raw_metrics.items():
-            if isinstance(k, str) and isinstance(v, (int, float)):
-                safe_metrics[str(k)[:64]] = round(float(v), 6)
-        # Size cap
-        if len(json.dumps(safe_metrics)) > MAX_METRICS_FILE_BYTES:
+        # Host-side trust boundary: re-check shape/size even though runner.py
+        # already sanitised key/value types inside the container.
+        raw_metrics = raw.get("metrics")
+        if not isinstance(raw_metrics, dict):
+            if result["error"] is None:
+                result["error"] = "Generated code did not produce a valid metrics dict."
+        elif len(json.dumps(raw_metrics)) > MAX_METRICS_FILE_BYTES:
             result["error"] = "Metrics dict exceeded size limit."
         else:
-            result["metrics"] = safe_metrics
+            result["metrics"] = raw_metrics
 
-    return result
+        return result
 
 
 def _validate_dataset_path(path: str) -> Path:
