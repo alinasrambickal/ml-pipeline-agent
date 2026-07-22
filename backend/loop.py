@@ -1,6 +1,6 @@
 """
-loop.py — Main agent loop orchestration (Step 1: local exec, no Docker/API/frontend)
- 
+loop.py — Main agent loop orchestration (Docker sandbox, no API/frontend yet)
+
 Run with:
     python loop.py --dataset path/to/data.csv --task "predict whether a customer churns"
 """
@@ -10,12 +10,13 @@ import json
 import pandas as pd
 from pathlib import Path
  
-from config import MAX_ITERATIONS, MODEL_REGISTRY
+from config import MAX_ITERATIONS, MAX_EVALUATOR_RETRIES, MODEL_REGISTRY
 from agents.planner import run_planner
 from agents.coder import run_coder
 from agents.evaluator import run_evaluator
 from sandbox.executor import run_code
-from registry import validate_next_params, get_defaults, best_metric_value
+from registry import validate_next_params, get_defaults, best_metric_value, is_duplicate_params
+from stopping import decide_continuation, is_stagnant, pick_untried_model
  
 import sys
  
@@ -151,37 +152,112 @@ def run_experiment(dataset_path: str, task_description: str) -> dict:
             print(f"[EXECUTOR] ERROR: {exec_result['error'][:500]}")
         print(f"[EXECUTOR] Metrics: {exec_result['metrics']}")
  
-        # Evaluator
-        print(f"[EVALUATOR] Reviewing results...")
-        decision = run_evaluator(
-            metrics=exec_result["metrics"],
-            stdout=exec_result["stdout"],
-            stderr=exec_result["stderr"] + (exec_result["error"] or ""),
+        # Deterministic continue/stop decision — no LLM call needed for this;
+        # it's fully derivable from iteration count, this run's metrics, and
+        # which models have been tried (see stopping.py).
+        continuation = decide_continuation(
             iteration=iteration,
             max_iterations=MAX_ITERATIONS,
             model_used=model_used,
+            metrics=exec_result["metrics"],
             previous_metrics=previous_metrics,
             history=all_iterations,
             primary_metric=primary_metric,
         )
-        print(f"[EVALUATOR] Decision:\n{json.dumps(decision, indent=2)}\n")
- 
-        # Validate evaluator's next_model/next_params against registry
-        if decision["should_continue"] and decision.get("next_model"):
+
+        if not continuation["should_continue"]:
+            print(f"[LOOP] Stopping: {continuation['reason']}")
+            all_iterations.append({
+                "iteration": iteration,
+                "model_used": model_used,
+                "params_used": params_used,
+                "code": code,
+                "stdout": exec_result["stdout"],
+                "stderr": exec_result["stderr"],
+                "error": exec_result["error"],
+                "metrics": exec_result["metrics"],
+                "next_strategy": "",
+                "reason": continuation["reason"],
+            })
+            break
+
+        # Continuing — the Evaluator only decides WHAT to try next, not
+        # whether to. If this model just stagnated (same model as last
+        # iteration, < 0.01 improvement), tell it up front so it's less
+        # likely to need a retry.
+        prev_model = all_iterations[-1]["model_used"] if all_iterations else None
+        must_switch_from = model_used if (
+            prev_model == model_used
+            and is_stagnant(model_used, exec_result["metrics"], previous_metrics, primary_metric)
+        ) else None
+
+        print(f"[EVALUATOR] Reviewing results...")
+        decision = None
+        rejection_reason = None
+        for attempt in range(1, MAX_EVALUATOR_RETRIES + 1):
+            proposal = run_evaluator(
+                metrics=exec_result["metrics"],
+                stdout=exec_result["stdout"],
+                stderr=exec_result["stderr"] + (exec_result["error"] or ""),
+                iteration=iteration,
+                max_iterations=MAX_ITERATIONS,
+                model_used=model_used,
+                previous_metrics=previous_metrics,
+                history=all_iterations,
+                primary_metric=primary_metric,
+                must_switch_from=must_switch_from,
+                rejection_reason=rejection_reason,
+            )
+
             try:
-                validate_next_params(decision["next_model"], decision["next_params"])
-                next_model = decision["next_model"]
-                next_params = decision["next_params"]
+                validate_next_params(proposal["next_model"], proposal["next_params"])
             except ValueError as e:
-                print(f"[LOOP] Evaluator suggested invalid params ({e}). Falling back to defaults.")
-                next_model = decision.get("next_model", plan["suggested_models"][0])
-                if next_model not in MODEL_REGISTRY:
-                    next_model = plan["suggested_models"][0]
-                next_params = get_defaults(next_model)
- 
+                rejection_reason = str(e)
+                print(f"[EVALUATOR] Attempt {attempt} rejected: {rejection_reason}")
+                continue
+
+            if is_duplicate_params(proposal["next_model"], proposal["next_params"], all_iterations):
+                rejection_reason = (
+                    f"{proposal['next_model']} with params {proposal['next_params']} was already "
+                    f"tried in a previous iteration — propose a different configuration."
+                )
+                print(f"[EVALUATOR] Attempt {attempt} rejected: {rejection_reason}")
+                continue
+
+            if must_switch_from and proposal["next_model"] == must_switch_from:
+                rejection_reason = (
+                    f"{must_switch_from} showed < 0.01 improvement across two consecutive "
+                    f"iterations — you must switch to a different model class."
+                )
+                print(f"[EVALUATOR] Attempt {attempt} rejected: {rejection_reason}")
+                continue
+
+            decision = proposal
+            break
+
+        if decision is None:
+            fallback_model = pick_untried_model(all_iterations + [{"model_used": model_used}])
+            if fallback_model is None:
+                fallback_model = next(m for m in MODEL_REGISTRY if m != model_used)
+            decision = {
+                "next_model": fallback_model,
+                "next_params": get_defaults(fallback_model),
+                "next_strategy": f"Deterministic fallback to {fallback_model} with defaults.",
+                "reason": (
+                    f"Evaluator proposals were rejected after {MAX_EVALUATOR_RETRIES} attempts; "
+                    f"used deterministic fallback."
+                ),
+            }
+            print(f"[EVALUATOR] All attempts rejected. Falling back to {fallback_model} with defaults.")
+
+        print(f"[EVALUATOR] Decision:\n{json.dumps(decision, indent=2)}\n")
+
+        next_model = decision["next_model"]
+        next_params = decision["next_params"]
+
         # Record iteration — model_used/params_used are what actually produced
-        # `metrics` this iteration (next_model/next_params above have already
-        # been overwritten with the evaluator's decision for the iteration after this one)
+        # `metrics` this iteration (next_model/next_params above are the
+        # decision for the iteration after this one)
         iter_record = {
             "iteration": iteration,
             "model_used": model_used,
@@ -196,11 +272,7 @@ def run_experiment(dataset_path: str, task_description: str) -> dict:
         }
         all_iterations.append(iter_record)
         previous_metrics = exec_result["metrics"] if exec_result["metrics"] else previous_metrics
- 
-        if not decision["should_continue"]:
-            print(f"[LOOP] Stopping: {decision['reason']}")
-            break
- 
+
     # ── Final report ──────────────────────────────────────────────────────
     best = max(
         all_iterations,

@@ -26,7 +26,13 @@ GROQ_API_KEY: str = _require("GROQ_API_KEY")
 # ── Agent settings ─────────────────────────────────────────────────────────
 GROQ_MODEL = "llama-3.3-70b-versatile"
 AGENT_TEMPERATURE = 0.2       # low temp → more deterministic code gen
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 5
+MAX_EVALUATOR_RETRIES = 2     # retries with feedback before falling back to a deterministic pick
+
+# Metrics where a fixed "good enough, stop" threshold is meaningful. Absent
+# for error metrics like rmse/mae, whose scale depends on the target — no
+# universal threshold makes sense there.
+METRIC_STOP_THRESHOLDS = {"accuracy": 0.97, "f1": 0.97}
 
 # ── Sandbox (Docker-based, Step 2) ────────────────────────────────────────
 EXEC_TIMEOUT_SECONDS = 60

@@ -76,59 +76,8 @@ def best_metric_value(metrics: dict, primary_metric: str) -> float:
     return -val if primary_metric in LOWER_IS_BETTER_METRICS else val
 
 
-def enforce_model_switch(
-    decision: dict,
-    model_used: str,
-    metrics: dict,
-    previous_metrics: dict | None,
-    history: list[dict] | None,
-    primary_metric: str,
-) -> dict:
-    """
-    Deterministic guardrail: if the model that just ran (model_used) is the
-    same one used in the previous iteration and improvement was < 0.01, force
-    a switch to an untried model if the evaluator still proposes staying on it.
-
-    The LLM doesn't reliably follow this rule from prompting alone, so it's
-    enforced here in code — same principle as validate_next_params. Improvement
-    is recomputed from actual metrics rather than trusting the LLM-reported
-    'improvement' field. Compares against the iteration that JUST ran (passed
-    in explicitly), not just entries already in `history` — history only holds
-    iterations before this one, so comparing history[-1] vs history[-2] alone
-    lags a full iteration behind and can never catch the pattern in time.
-    """
-    if not decision.get("should_continue") or not decision.get("next_model"):
-        return decision
-    if not history or not previous_metrics:
-        return decision  # no prior completed iteration to compare against yet
-
-    prev_model = history[-1].get("model_used")
-    if not prev_model or prev_model != model_used:
-        return decision
-
-    improvement = best_metric_value(metrics, primary_metric) - \
-        best_metric_value(previous_metrics, primary_metric)
-    if improvement >= 0.01:
-        return decision
-
-    if decision["next_model"] != model_used:
-        return decision  # evaluator already chose to switch — nothing to enforce
-
-    tried_models = {r.get("model_used") for r in history if r.get("model_used")}
-    tried_models.add(model_used)
-    candidates = [m for m in MODEL_REGISTRY if m not in tried_models]
-    if not candidates:
-        candidates = [m for m in MODEL_REGISTRY if m != model_used]
-    if not candidates:
-        return decision  # only one model in the registry — nothing else to switch to
-
-    new_model = candidates[0]
-    decision["next_model"] = new_model
-    decision["next_params"] = get_defaults(new_model)
-    decision["reason"] = (
-        f"{decision.get('reason', '')} "
-        f"[Overridden: forced switch to {new_model} — {model_used} showed "
-        f"< 0.01 improvement across 2 consecutive iterations.]"
-    ).strip()
-    decision["next_strategy"] = f"Switch to {new_model} with default params: {decision['next_params']}"
-    return decision
+def is_duplicate_params(model_name: str, params: dict, history: list[dict] | None) -> bool:
+    """True if this exact model+params combo was already used in a previous iteration."""
+    if not history:
+        return False
+    return any(r.get("model_used") == model_name and r.get("params_used") == params for r in history)
