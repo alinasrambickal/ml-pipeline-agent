@@ -1,0 +1,29 @@
+# Environment — NEVER commit this
+backend/.env
+
+# Internal dev notes — never commit, private only
+CLAUDE.md
+ 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+ 
+# Data / outputs (can be large or sensitive)
+backend/data/
+backend/outputs/
+*.csv
+*.pkl
+ 
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings (machine-specific, not project config)
+.claude/settings.local.json
+ 

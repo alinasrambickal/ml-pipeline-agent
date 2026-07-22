@@ -1,0 +1,293 @@
+
+============================================================
+  AUTONOMOUS ML PIPELINE AGENT
+============================================================
+  Task: predict whether a passenger survived
+  Dataset: data/titanic_full.csv
+============================================================
+
+[PLANNER] Analysing dataset and task...
+[PLANNER] Plan:
+{
+  "task_type": "classification",
+  "target_column": "Survived",
+  "metric": "accuracy",
+  "initial_strategy": "Start by training a logistic regression model on the dataset to establish a baseline performance.",
+  "suggested_models": [
+    "LogisticRegression",
+    "DecisionTreeClassifier",
+    "RandomForestClassifier"
+  ]
+}
+
+────────────────────────────────────────────────────────────
+  ITERATION 1 / 3
+────────────────────────────────────────────────────────────
+[CODER] Generating training code...
+[CODER] Generated 61 lines of code.
+
+--- Generated Code ---
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score
+
+# Load data
+df = pd.read_csv(DATASET_PATH)
+
+# Define X and y
+X = df.drop('Survived', axis=1)
+y = df['Survived']
+
+# Compute numeric_features and categorical_features
+numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
+categorical_features = X.select_dtypes(include=['object']).columns
+
+# Define preprocessing steps
+numeric_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median'))
+])
+
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+])
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features)
+    ]
+)
+
+# Define the model
+model = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('classifier', LogisticRegression(solver='lbfgs', penalty='l2', C=1.0, max_iter=100))
+])
+
+# Split data into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train the model
+model.fit(X_train, y_train)
+
+# Make predictions on the test set
+y_pred = model.predict(X_test)
+
+# Evaluate the model
+metrics = {
+    "accuracy": accuracy_score(y_test, y_pred),
+    "f1": f1_score(y_test, y_pred)
+}
+
+# Print a one-line summary
+print(f"Model trained with accuracy {metrics['accuracy']:.3f} and f1 score {metrics['f1']:.3f}")
+--- End Code ---
+
+[EXECUTOR] Running code in restricted sandbox...
+[EXECUTOR] stdout: Model trained with accuracy 0.827 and f1 score 0.783
+
+[EXECUTOR] stderr: /Users/alinasrambickal/Desktop/Projects/ml-pipeline-agent/.venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT.
+
+Increase the number of iterations (max_iter) or scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_mode
+[EXECUTOR] Metrics: {'accuracy': 0.826816, 'f1': 0.783217}
+[EVALUATOR] Reviewing results...
+[EVALUATOR] Decision:
+{
+  "should_continue": true,
+  "reason": "The model did not converge and the maximum number of iterations was reached.",
+  "next_strategy": "Increase max_iter to allow the model to converge.",
+  "next_model": "LogisticRegression",
+  "next_params": {
+    "solver": "lbfgs",
+    "penalty": "l2",
+    "C": 1.0,
+    "max_iter": 200
+  },
+  "improvement": null
+}
+
+────────────────────────────────────────────────────────────
+  ITERATION 2 / 3
+────────────────────────────────────────────────────────────
+[CODER] Generating training code...
+[CODER] Generated 52 lines of code.
+
+--- Generated Code ---
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score
+
+# Load data
+df = pd.read_csv(DATASET_PATH)
+
+# Define X and y
+X = df.drop('Survived', axis=1)
+y = df['Survived']
+
+# Compute numeric_features and categorical_features
+numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
+categorical_features = X.select_dtypes(include=['object']).columns
+
+# Preprocess
+numeric_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median'))])
+
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))])
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features)])
+
+# Split train/test
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train model
+model = Pipeline(steps=[('preprocessor', preprocessor),
+                      ('classifier', LogisticRegression(solver='lbfgs', penalty='l2', C=1.0, max_iter=200))])
+
+model.fit(X_train, y_train)
+
+# Evaluate
+y_pred = model.predict(X_test)
+metrics = {
+    "accuracy": accuracy_score(y_test, y_pred),
+    "f1": f1_score(y_test, y_pred)
+}
+
+# Print summary
+print(f"Model trained with accuracy {metrics['accuracy']:.3f} and f1 score {metrics['f1']:.3f}")
+--- End Code ---
+
+[EXECUTOR] Running code in restricted sandbox...
+[EXECUTOR] stdout: Model trained with accuracy 0.827 and f1 score 0.783
+
+[EXECUTOR] stderr: /Users/alinasrambickal/Desktop/Projects/ml-pipeline-agent/.venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT.
+
+Increase the number of iterations (max_iter) or scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_mode
+[EXECUTOR] Metrics: {'accuracy': 0.826816, 'f1': 0.783217}
+[EVALUATOR] Reviewing results...
+[EVALUATOR] Decision:
+{
+  "should_continue": true,
+  "reason": "The model did not converge and the maximum number of iterations was reached. [Overridden: forced switch to RandomForestClassifier \u2014 LogisticRegression showed < 0.01 improvement across 2 consecutive iterations.]",
+  "next_strategy": "Switch to RandomForestClassifier with default params: {'n_estimators': 100, 'max_depth': None, 'min_samples_split': 2, 'random_state': 42}",
+  "next_model": "RandomForestClassifier",
+  "next_params": {
+    "n_estimators": 100,
+    "max_depth": null,
+    "min_samples_split": 2,
+    "random_state": 42
+  },
+  "improvement": 0.0
+}
+
+────────────────────────────────────────────────────────────
+  ITERATION 3 / 3
+────────────────────────────────────────────────────────────
+[CODER] Generating training code...
+[CODER] Generated 52 lines of code.
+
+--- Generated Code ---
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.ensemble import RandomForestClassifier
+
+# Load data
+df = pd.read_csv(DATASET_PATH)
+
+# Define X and y
+X = df.drop('Survived', axis=1)
+y = df['Survived']
+
+# Compute numeric_features and categorical_features
+numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
+categorical_features = X.select_dtypes(include=['object']).columns
+
+# Preprocess
+numeric_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median'))])
+
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))])
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features)])
+
+# Split train/test
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train model
+model = Pipeline(steps=[('preprocessor', preprocessor),
+                      ('classifier', RandomForestClassifier(n_estimators=100, max_depth=None, min_samples_split=2, random_state=42))])
+
+model.fit(X_train, y_train)
+
+# Evaluate
+y_pred = model.predict(X_test)
+metrics = {
+    "accuracy": accuracy_score(y_test, y_pred),
+    "f1": f1_score(y_test, y_pred)
+}
+
+# Print summary
+print(f"Model trained with accuracy {metrics['accuracy']:.3f} and f1 score {metrics['f1']:.3f}")
+--- End Code ---
+
+[EXECUTOR] Running code in restricted sandbox...
+[EXECUTOR] stdout: Model trained with accuracy 0.821 and f1 score 0.765
+
+[EXECUTOR] Metrics: {'accuracy': 0.821229, 'f1': 0.764706}
+[EVALUATOR] Reviewing results...
+[EVALUATOR] Decision:
+{
+  "should_continue": false,
+  "reason": "Reached max iterations (3).",
+  "next_strategy": "",
+  "next_model": "",
+  "next_params": {},
+  "improvement": -0.005587
+}
+
+[LOOP] Stopping: Reached max iterations (3).
+
+============================================================
+  FINAL REPORT
+============================================================
+  Best iteration: 1
+  Best metrics:   {'accuracy': 0.826816, 'f1': 0.783217}
+============================================================
+
+Full report saved to experiment_report.json
