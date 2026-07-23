@@ -26,13 +26,26 @@ GROQ_API_KEY: str = _require("GROQ_API_KEY")
 # ── Agent settings ─────────────────────────────────────────────────────────
 GROQ_MODEL = "llama-3.3-70b-versatile"
 AGENT_TEMPERATURE = 0.2       # low temp → more deterministic code gen
-MAX_ITERATIONS = 5
+
+# Each of the 3 registered models now runs as its own parallel branch (see
+# loop.py), tuning only itself — no more cross-model switching. 3 = 1 initial
+# run + 2 tuning attempts per model. Chosen to keep a full 3-branch run's
+# token usage comfortably within Groq's free-tier daily budget (see
+# groq_client.py) across repeated test runs during development.
+ITERATIONS_PER_BRANCH = 3
 MAX_EVALUATOR_RETRIES = 2     # retries with feedback before falling back to a deterministic pick
 
 # Metrics where a fixed "good enough, stop" threshold is meaningful. Absent
 # for error metrics like rmse/mae, whose scale depends on the target — no
 # universal threshold makes sense there.
 METRIC_STOP_THRESHOLDS = {"accuracy": 0.97, "f1": 0.97}
+
+# ── Groq rate limiting (shared across the 3 parallel branches) ────────────
+# Free tier is 30 RPM / 12K TPM for llama-3.3-70b-versatile — these stay a
+# bit under that so token-estimation slop doesn't tip us over the real limit.
+GROQ_RPM_LIMIT = 25
+GROQ_TPM_LIMIT = 10_000
+GROQ_MAX_RETRIES = 3
 
 # ── Sandbox (Docker-based, Step 2) ────────────────────────────────────────
 EXEC_TIMEOUT_SECONDS = 60

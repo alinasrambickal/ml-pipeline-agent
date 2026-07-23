@@ -6,11 +6,8 @@ a Python training script as a string. The script is validated for dangerous
 patterns before being returned to the caller.
 """
 
-from groq import Groq
-from config import GROQ_API_KEY, GROQ_MODEL, AGENT_TEMPERATURE, BLOCKED_CODE_PATTERNS
-
-# _client = Groq(api_key=GROQ_API_KEY) //commented out for lazy instantiation
-
+from config import GROQ_MODEL, AGENT_TEMPERATURE, BLOCKED_CODE_PATTERNS
+from groq_client import call_groq
 from registry import get_registry_prompt_block
 
 SYSTEM_PROMPT = """You are an ML engineer writing sandboxed training scripts.
@@ -48,8 +45,6 @@ def run_coder(
     previous_results: list[dict] | None = None,
     generation_error: str | None = None,
 ) -> str:
-    client = Groq(api_key=GROQ_API_KEY)
-
     rendered_prompt = SYSTEM_PROMPT.format(registry_block=get_registry_prompt_block())
     context_block = _format_previous_results(previous_results)
 
@@ -67,7 +62,7 @@ def run_coder(
         f"{error_block}"
     )
 
-    response = client.chat.completions.create(
+    response = call_groq(
         model=GROQ_MODEL,
         messages=[
             {"role": "system", "content": rendered_prompt},

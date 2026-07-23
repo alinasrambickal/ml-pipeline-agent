@@ -20,415 +20,65 @@
   ]
 }
 
-────────────────────────────────────────────────────────────
-  ITERATION 1 / 5
-────────────────────────────────────────────────────────────
-[CODER] Generating training code...
-[CODER] Generated 49 lines of code.
-
---- Generated Code ---
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score
-
-# Load data
-df = pd.read_csv(DATASET_PATH)
-
-# Define X and y
-X = df.drop('Survived', axis=1)
-y = df['Survived']
-
-# Compute numeric_features and categorical_features
-numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
-categorical_features = X.select_dtypes(include=['object']).columns
-
-# Preprocess
-numeric_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='median'))])
-
-categorical_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-    ('onehot', OneHotEncoder(handle_unknown='ignore'))])
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numeric_transformer, numeric_features),
-        ('cat', categorical_transformer, categorical_features)])
-
-# Split train/test
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Train model
-model = Pipeline(steps=[('preprocessor', preprocessor),
-                      ('classifier', LogisticRegression(solver='lbfgs', penalty='l2', C=1.0, max_iter=100))])
-
-model.fit(X_train, y_train)
-
-# Evaluate
-y_pred = model.predict(X_test)
-metrics = {"accuracy": accuracy_score(y_test, y_pred), "f1": f1_score(y_test, y_pred)}
-
-# Print summary
-print(f"Accuracy: {metrics['accuracy']:.3f}, F1: {metrics['f1']:.3f}")
---- End Code ---
-
-[EXECUTOR] Running code in restricted sandbox...
-[EXECUTOR] stdout: Accuracy: 0.832, F1: 0.792
-
-[EXECUTOR] stderr: /usr/local/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):
-STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT.
-
-Increase the number of iterations (max_iter) or scale the data as shown in:
-    https://scikit-learn.org/stable/modules/preprocessing.html
-Please also refer to the documentation for alternative solver options:
-    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
-  n_iter_i = _check_optimi
-[EXECUTOR] Metrics: {'accuracy': 0.832402, 'f1': 0.791667}
-[EVALUATOR] Reviewing results...
-[EVALUATOR] Decision:
-{
-  "reason": "The model did not converge due to the total number of iterations reaching the limit.",
-  "next_strategy": "Increase max_iter to allow the model to converge.",
-  "next_model": "LogisticRegression",
-  "next_params": {
-    "solver": "lbfgs",
-    "penalty": "l2",
-    "C": 1.0,
-    "max_iter": 200
-  }
-}
-
-────────────────────────────────────────────────────────────
-  ITERATION 2 / 5
-────────────────────────────────────────────────────────────
-[CODER] Generating training code...
-[CODER] Generated 51 lines of code.
-
---- Generated Code ---
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score
-
-# Load data
-df = pd.read_csv(DATASET_PATH)
-
-# Define X and y
-X = df.drop('Survived', axis=1)
-y = df['Survived']
-
-# Compute numeric_features and categorical_features
-numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
-categorical_features = X.select_dtypes(include=['object']).columns
-
-# Preprocess
-numeric_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='median'))])
-
-categorical_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-    ('onehot', OneHotEncoder(handle_unknown='ignore'))])
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numeric_transformer, numeric_features),
-        ('cat', categorical_transformer, categorical_features)])
-
-# Split train/test
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Train model
-model = Pipeline(steps=[('preprocessor', preprocessor),
-                      ('classifier', LogisticRegression(solver='lbfgs', penalty='l2', C=1.0, max_iter=200))])
-model.fit(X_train, y_train)
-
-# Evaluate
-y_pred = model.predict(X_test)
-metrics = {
-    "accuracy": accuracy_score(y_test, y_pred),
-    "f1": f1_score(y_test, y_pred)
-}
-
-# Print summary
-print(f"Accuracy: {metrics['accuracy']:.3f}, F1: {metrics['f1']:.3f}")
---- End Code ---
-
-[EXECUTOR] Running code in restricted sandbox...
-[EXECUTOR] stdout: Accuracy: 0.816, F1: 0.776
-
-[EXECUTOR] stderr: /usr/local/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):
-STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT.
-
-Increase the number of iterations (max_iter) or scale the data as shown in:
-    https://scikit-learn.org/stable/modules/preprocessing.html
-Please also refer to the documentation for alternative solver options:
-    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
-  n_iter_i = _check_optimi
-[EXECUTOR] Metrics: {'accuracy': 0.815642, 'f1': 0.77551}
-[EVALUATOR] Reviewing results...
-[EVALUATOR] Decision:
-{
-  "reason": "The model did not converge and showed less than 0.01 improvement across the last two iterations.",
-  "next_strategy": "Switch to a different model class to improve performance",
-  "next_model": "RandomForestClassifier",
-  "next_params": {
-    "n_estimators": 150,
-    "max_depth": 10,
-    "min_samples_split": 5,
-    "random_state": 42
-  }
-}
-
-────────────────────────────────────────────────────────────
-  ITERATION 3 / 5
-────────────────────────────────────────────────────────────
-[CODER] Generating training code...
-[CODER] Generated 49 lines of code.
-
---- Generated Code ---
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score
-
-# Load data
-df = pd.read_csv(DATASET_PATH)
-
-# Define X and y
-X = df.drop('Survived', axis=1)
-y = df['Survived']
-
-# Compute numeric_features and categorical_features
-numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
-categorical_features = X.select_dtypes(include=['object']).columns
-
-# Preprocess
-numeric_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='median'))])
-
-categorical_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-    ('onehot', OneHotEncoder(handle_unknown='ignore'))])
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numeric_transformer, numeric_features),
-        ('cat', categorical_transformer, categorical_features)])
-
-# Split train/test
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Train model
-model = Pipeline(steps=[('preprocessor', preprocessor),
-                      ('classifier', RandomForestClassifier(n_estimators=150, max_depth=10, min_samples_split=5, random_state=42))])
-
-model.fit(X_train, y_train)
-
-# Evaluate
-y_pred = model.predict(X_test)
-metrics = {'accuracy': accuracy_score(y_test, y_pred), 'f1': f1_score(y_test, y_pred, zero_division=0)}
-
-# Print summary
-print(f'Accuracy: {metrics["accuracy"]:.3f}, F1: {metrics["f1"]:.3f}')
---- End Code ---
-
-[EXECUTOR] Running code in restricted sandbox...
-[EXECUTOR] stdout: Accuracy: 0.777, F1: 0.655
-
-[EXECUTOR] Metrics: {'accuracy': 0.776536, 'f1': 0.655172}
-[EVALUATOR] Reviewing results...
-[EVALUATOR] Decision:
-{
-  "reason": "The current iteration's metrics are lower than the previous iteration's metrics, indicating a potential decrease in model performance.",
-  "next_strategy": "Try a different model class since the previous iteration already attempted to fix convergence by increasing max_iter and improvement is still not observed.",
-  "next_model": "RandomForestClassifier",
-  "next_params": {
-    "n_estimators": 150,
-    "max_depth": 5,
-    "min_samples_split": 3,
-    "random_state": 42
-  }
-}
-
-────────────────────────────────────────────────────────────
-  ITERATION 4 / 5
-────────────────────────────────────────────────────────────
-[CODER] Generating training code...
-[CODER] Generated 56 lines of code.
-
---- Generated Code ---
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score
-
-# Load data
-df = pd.read_csv(DATASET_PATH)
-
-# Define X and y
-X = df.drop('Survived', axis=1)
-y = df['Survived']
-
-# Compute numeric and categorical features
-numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
-categorical_features = X.select_dtypes(include=['object']).columns
-
-# Preprocess data
-numeric_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='median'))])
-
-categorical_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-    ('onehot', OneHotEncoder(handle_unknown='ignore'))])
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numeric_transformer, numeric_features),
-        ('cat', categorical_transformer, categorical_features)])
-
-# Split data into training and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Create pipeline with preprocessing and model
-pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                            ('classifier', RandomForestClassifier(n_estimators=150, max_depth=5, min_samples_split=3, random_state=42))])
-
-# Train the model
-pipeline.fit(X_train, y_train)
-
-# Make predictions on the test set
-y_pred = pipeline.predict(X_test)
-
-# Evaluate the model
-accuracy = accuracy_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred, average='macro')
-
-# Set metrics dictionary
-metrics = {'accuracy': accuracy, 'f1': f1}
-
-# Print summary
-print(f'Accuracy: {accuracy:.3f}, F1: {f1:.3f}')
---- End Code ---
-
-[EXECUTOR] Running code in restricted sandbox...
-[EXECUTOR] stdout: Accuracy: 0.726, F1: 0.658
-
-[EXECUTOR] Metrics: {'accuracy': 0.726257, 'f1': 0.657931}
-[EVALUATOR] Reviewing results...
-[EVALUATOR] Decision:
-{
-  "reason": "The current model, RandomForestClassifier, showed less than 0.01 improvement across the last two iterations, indicating stagnation.",
-  "next_strategy": "Switch to a different model class to potentially improve performance.",
-  "next_model": "DecisionTreeClassifier",
-  "next_params": {
-    "max_depth": 5,
-    "min_samples_split": 3,
-    "criterion": "gini",
-    "random_state": 42
-  }
-}
-
-────────────────────────────────────────────────────────────
-  ITERATION 5 / 5
-────────────────────────────────────────────────────────────
-[CODER] Generating training code...
-[CODER] Generated 62 lines of code.
-
---- Generated Code ---
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, f1_score
-
-# Load data
-df = pd.read_csv(DATASET_PATH)
-
-# Define X and y
-X = df.drop('Survived', axis=1)
-y = df['Survived']
-
-# Compute numeric_features and categorical_features
-numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
-categorical_features = X.select_dtypes(include=['object']).columns
-
-# Create preprocessing pipeline
-numeric_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='median'))
-])
-
-categorical_transformer = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-    ('onehot', OneHotEncoder(handle_unknown='ignore'))
-])
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numeric_transformer, numeric_features),
-        ('cat', categorical_transformer, categorical_features)
-    ]
-)
-
-# Split data into training and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Create pipeline with preprocessing and model
-pipeline = Pipeline(steps=[
-    ('preprocessor', preprocessor),
-    ('model', DecisionTreeClassifier(max_depth=5, min_samples_split=3, criterion='gini', random_state=42))
-])
-
-# Train the model
-pipeline.fit(X_train, y_train)
-
-# Make predictions on the test set
-y_pred = pipeline.predict(X_test)
-
-# Evaluate the model
-accuracy = accuracy_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred)
-
-# Set metrics dictionary
-metrics = {'accuracy': accuracy, 'f1': f1}
-
-# Print summary
-print(f'Accuracy: {accuracy:.3f}, F1: {f1:.3f}')
---- End Code ---
-
-[EXECUTOR] Running code in restricted sandbox...
-[EXECUTOR] stdout: Accuracy: 0.816, F1: 0.769
-
-[EXECUTOR] Metrics: {'accuracy': 0.815642, 'f1': 0.769231}
-[LOOP] Stopping: Reached max iterations (5).
+[LOOP] Running 3 branches in parallel: ['LogisticRegression', 'RandomForestClassifier', 'DecisionTreeClassifier']
+
+[LogisticRegression] ITERATION 1 / 3
+[RandomForestClassifier] ITERATION 1 / 3
+[DecisionTreeClassifier] ITERATION 1 / 3
+[LogisticRegression] [CODER] Generated 54 lines of code.
+[LogisticRegression] [EXECUTOR] Running code in Docker sandbox...
+[RandomForestClassifier] [CODER] Generated 49 lines of code.
+[RandomForestClassifier] [EXECUTOR] Running code in Docker sandbox...
+[DecisionTreeClassifier] [CODER] Generated 55 lines of code.
+[DecisionTreeClassifier] [EXECUTOR] Running code in Docker sandbox...
+[DecisionTreeClassifier] [EXECUTOR] Metrics: {'accuracy': 0.798883, 'f1': 0.735294}
+[DecisionTreeClassifier] [EVALUATOR] Reviewing results...
+[RandomForestClassifier] [EXECUTOR] Metrics: {'accuracy': 0.821229, 'f1': 0.764706}
+[RandomForestClassifier] [EVALUATOR] Reviewing results...
+[LogisticRegression] [EXECUTOR] Metrics: {'accuracy': 0.832402, 'f1': 0.791667}
+[LogisticRegression] [EVALUATOR] Reviewing results...
+[DecisionTreeClassifier] [EVALUATOR] Decision: {"reason": "This is the first iteration with a baseline accuracy of 0.798883.", "next_strategy": "Try increasing max_depth to allow the model to learn more complex relationships.", "next_params": {"max_depth": 10, "min_samples_split": 2, "criterion": "gini", "random_state": 42}}
+[DecisionTreeClassifier] ITERATION 2 / 3
+[LogisticRegression] [EVALUATOR] Decision: {"reason": "The model failed to converge due to reaching the maximum number of iterations.", "next_strategy": "Increase max_iter to allow the model to converge.", "next_params": {"solver": "lbfgs", "penalty": "l2", "C": 1.0, "max_iter": 200}}
+[LogisticRegression] ITERATION 2 / 3
+[RandomForestClassifier] [EVALUATOR] Decision: {"reason": "This is the first iteration with a baseline model performance of 0.821 accuracy.", "next_strategy": "Try increasing the number of estimators to improve model performance.", "next_params": {"n_estimators": 200, "max_depth": null, "min_samples_split": 2, "random_state": 42}}
+[RandomForestClassifier] ITERATION 2 / 3
+[DecisionTreeClassifier] [CODER] Generated 56 lines of code.
+[DecisionTreeClassifier] [EXECUTOR] Running code in Docker sandbox...
+[LogisticRegression] [CODER] Generated 49 lines of code.
+[LogisticRegression] [EXECUTOR] Running code in Docker sandbox...
+[DecisionTreeClassifier] [EXECUTOR] Metrics: {'accuracy': 0.787709, 'f1': 0.720588}
+[DecisionTreeClassifier] [EVALUATOR] Reviewing results...
+[LogisticRegression] [EXECUTOR] Metrics: {'accuracy': 0.815642, 'f1': 0.77551}
+[LogisticRegression] [EVALUATOR] Reviewing results...
+[DecisionTreeClassifier] [EVALUATOR] Decision: {"reason": "The current run's accuracy is lower than the previous run's accuracy.", "next_strategy": "Try decreasing the complexity of the tree by setting a finite max_depth and adjusting min_samples_split to require more samples to split an internal node.", "next_params": {"max_depth": 5, "min_samples_split": 10, "criterion": "entropy", "random_state": 42}}
+[DecisionTreeClassifier] ITERATION 3 / 3
+[LogisticRegression] [EVALUATOR] Attempt 1 rejected: params {'solver': 'lbfgs', 'penalty': 'l2', 'C': 1.0, 'max_iter': 200} were already tried in a previous iteration — propose a different configuration.
+[LogisticRegression] [EVALUATOR] Decision: {"reason": "The current run's metrics are lower than the previous run's metrics and a ConvergenceWarning was raised, indicating that the model did not converge.", "next_strategy": "Try a different solver and penalty combination to see if it improves convergence and metrics.", "next_params": {"solver": "liblinear", "penalty": "l1", "C": 0.5, "max_iter": 100}}
+[LogisticRegression] ITERATION 3 / 3
+[RandomForestClassifier] [CODER] Generated 55 lines of code.
+[RandomForestClassifier] [EXECUTOR] Running code in Docker sandbox...
+[DecisionTreeClassifier] [CODER] Generated 56 lines of code.
+[DecisionTreeClassifier] [EXECUTOR] Running code in Docker sandbox...
+[DecisionTreeClassifier] [EXECUTOR] Metrics: {'accuracy': 0.826816, 'f1': 0.821098}
+[DecisionTreeClassifier] Stopping: Reached this branch's iteration budget (3).
+[RandomForestClassifier] [EXECUTOR] Metrics: {'accuracy': 0.810056, 'f1': 0.753623}
+[RandomForestClassifier] [EVALUATOR] Reviewing results...
+[RandomForestClassifier] [EVALUATOR] Decision: {"reason": "The current run's accuracy is lower than the previous run's accuracy.", "next_strategy": "Try increasing the number of estimators to improve the model's performance.", "next_params": {"n_estimators": 150, "max_depth": null, "min_samples_split": 2, "random_state": 42}}
+[RandomForestClassifier] ITERATION 3 / 3
+[LogisticRegression] [CODER] Generated 60 lines of code.
+[LogisticRegression] [EXECUTOR] Running code in Docker sandbox...
+[RandomForestClassifier] [CODER] Generated 56 lines of code.
+[RandomForestClassifier] [EXECUTOR] Running code in Docker sandbox...
+[LogisticRegression] [EXECUTOR] Metrics: {'accuracy': 0.798883, 'f1': 0.75}
+[LogisticRegression] Stopping: Reached this branch's iteration budget (3).
+[RandomForestClassifier] [EXECUTOR] Metrics: {'accuracy': 0.804469, 'f1': 0.744526}
+[RandomForestClassifier] Stopping: Reached this branch's iteration budget (3).
 
 ============================================================
   FINAL REPORT
 ============================================================
+  Best model:     LogisticRegression
   Best iteration: 1
   Best metrics:   {'accuracy': 0.832402, 'f1': 0.791667}
 ============================================================

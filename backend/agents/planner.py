@@ -7,11 +7,8 @@ are shared to avoid leaking dataset contents.
 """
 
 import json
-from groq import Groq
-from config import GROQ_API_KEY, GROQ_MODEL, AGENT_TEMPERATURE
-
-# Client is instantiated here (backend only). Key never leaves this process.
-# _client = Groq(api_key=GROQ_API_KEY) //commented out for lazy instantiation
+from config import GROQ_MODEL, AGENT_TEMPERATURE
+from groq_client import call_groq
 
 SYSTEM_PROMPT = """You are an ML planning agent.
 
@@ -42,14 +39,12 @@ def run_planner(dataset_description: str, task_description: str) -> dict:
         ValueError: if the LLM returns malformed JSON or missing keys.
     """
 
-    client = Groq(api_key=GROQ_API_KEY)
-
     user_message = (
         f"Dataset:\n{dataset_description}\n\n"
         f"Task: {task_description}"
     )
 
-    response = client.chat.completions.create(
+    response = call_groq(
         model=GROQ_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
